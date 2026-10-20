@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="TradeIngestion.Api/TradeIngestion.Api.csproj" />
+  <Project Path="TradeIngestion.Core/TradeIngestion.Core.csproj" />
+  <Project Path="TradeIngestion.Infrastructure/TradeIngestion.Infrastructure.csproj" />
+  <Project Path="TradeIngestion.Tests/TradeIngestion.Tests.csproj" />
+</Solution>
