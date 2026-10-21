@@ -1,0 +1,28 @@
+﻿@inherits LayoutComponentBase
+
+<div class="app-shell">
+    <header class="app-header">
+        <div class="container">
+            <div class="d-flex align-items-center justify-content-between py-3">
+                <div>
+                    <div class="app-kicker">OZ Trading Service</div>
+                    <h1 class="app-title mb-0">Trade ingestion</h1>
+                </div>
+                <nav class="d-flex gap-2">
+                    <NavLink class="btn btn-sm btn-outline-light" href="/" Match="NavLinkMatch.All">Snapshot</NavLink>
+                    <NavLink class="btn btn-sm btn-outline-light" href="/trade">Trade</NavLink>
+                </nav>
+            </div>
+        </div>
+    </header>
+
+    <main class="container py-4">
+        @Body
+    </main>
+</div>
+
+<div id="blazor-error-ui">
+    An unhandled error has occurred.
+    <a href="" class="reload">Reload</a>
+    <a class="dismiss">🗙</a>
+</div>

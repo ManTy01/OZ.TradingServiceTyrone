@@ -1,6 +1,173 @@
-@TradeIngestion.Api_HostAddress = http://localhost:5117
+@host = https://localhost:7129
+# Use http://localhost:5117 if you run the "http" launch profile.
 
-GET {{TradeIngestion.Api_HostAddress}}/weatherforecast/
+### 0. List accounts (seed: ACC-001, ACC-002)
+GET {{host}}/api/accounts
 Accept: application/json
 
-###
+# --- ACC-001 (1–2 Oct 2026) ---
+
+### A1. Original trade — expect 201, decision Accepted, isApplied true
+POST {{host}}/api/trades
+Content-Type: application/json
+
+{
+  "externalRef": "DEMO-ACC001-TRX-1001",
+  "accountId": "ACC-001",
+  "instrument": { "isin": "US0378331005", "symbol": "AAPL" },
+  "side": "BUY",
+  "quantity": 120,
+  "price": 185.40,
+  "tradeDate": "2026-10-01",
+  "asOf": "2026-10-01T10:15:00Z"
+}
+
+### A2. Duplicate re-send — expect 200, decision DuplicateIgnored, isApplied false
+POST {{host}}/api/trades
+Content-Type: application/json
+
+{
+  "externalRef": "DEMO-ACC001-TRX-1001",
+  "accountId": "ACC-001",
+  "instrument": { "isin": "US0378331005", "symbol": "AAPL" },
+  "side": "BUY",
+  "quantity": 120,
+  "price": 185.40,
+  "tradeDate": "2026-10-01",
+  "asOf": "2026-10-01T10:15:00Z"
+}
+
+### A3. Snapshot 1 Oct — quantity 120, marketValue 22320, unrealizedPnl 72, cash 0, totalValue 22320
+GET {{host}}/api/accounts/ACC-001/snapshots?date=2026-10-01
+Accept: application/json
+
+### A4. Correction next day (qty 100) — expect 200, decision CorrectionApplied, isApplied true
+POST {{host}}/api/trades
+Content-Type: application/json
+
+{
+  "externalRef": "DEMO-ACC001-TRX-1001",
+  "accountId": "ACC-001",
+  "instrument": { "isin": "US0378331005", "symbol": "AAPL" },
+  "side": "BUY",
+  "quantity": 100,
+  "price": 185.40,
+  "tradeDate": "2026-10-01",
+  "asOf": "2026-10-02T09:00:00Z"
+}
+
+### A5. Snapshot 1 Oct after correction — still quantity 120, marketValue 22320
+GET {{host}}/api/accounts/ACC-001/snapshots?date=2026-10-01
+Accept: application/json
+
+### A6. Snapshot 2 Oct — quantity 100, marketValue 18600, unrealizedPnl 60
+GET {{host}}/api/accounts/ACC-001/snapshots?date=2026-10-02
+Accept: application/json
+
+### A7. Fee on 1 Oct — expect 201, isApplied true
+POST {{host}}/api/cash
+Content-Type: application/json
+
+{
+  "externalRef": "DEMO-ACC001-FEE-1001",
+  "accountId": "ACC-001",
+  "type": "FEE",
+  "amount": -15.00,
+  "currency": "USD",
+  "tradeDate": "2026-10-01",
+  "asOf": "2026-10-01T10:20:00Z",
+  "description": "Brokerage fee"
+}
+
+### A8. Snapshot 1 Oct with fee — quantity 120, cashTotalUsd -15, totalValue 22305
+GET {{host}}/api/accounts/ACC-001/snapshots?date=2026-10-01
+Accept: application/json
+
+### A9. Snapshot 2 Oct with fee — quantity 100, cashTotalUsd -15, totalValue 18585
+GET {{host}}/api/accounts/ACC-001/snapshots?date=2026-10-02
+Accept: application/json
+
+# --- ACC-002 (15–16 Oct 2026) ---
+
+### B1. Original trade — expect 201, decision Accepted, isApplied true
+POST {{host}}/api/trades
+Content-Type: application/json
+
+{
+  "externalRef": "DEMO-TRX-1001",
+  "accountId": "ACC-002",
+  "instrument": { "isin": "US0378331005", "symbol": "AAPL" },
+  "side": "BUY",
+  "quantity": 120,
+  "price": 185.40,
+  "tradeDate": "2026-10-15",
+  "asOf": "2026-10-15T10:15:00Z"
+}
+
+### B2. Duplicate re-send — expect 200, decision DuplicateIgnored, isApplied false
+POST {{host}}/api/trades
+Content-Type: application/json
+
+{
+  "externalRef": "DEMO-TRX-1001",
+  "accountId": "ACC-002",
+  "instrument": { "isin": "US0378331005", "symbol": "AAPL" },
+  "side": "BUY",
+  "quantity": 120,
+  "price": 185.40,
+  "tradeDate": "2026-10-15",
+  "asOf": "2026-10-15T10:15:00Z"
+}
+
+### B3. Snapshot 15 Oct — quantity 120, marketValue 22320, unrealizedPnl 72, cash 0, totalValue 22320
+GET {{host}}/api/accounts/ACC-002/snapshots?date=2026-10-15
+Accept: application/json
+
+### B4. Correction next day (qty 100) — expect 200, decision CorrectionApplied, isApplied true
+POST {{host}}/api/trades
+Content-Type: application/json
+
+{
+  "externalRef": "DEMO-TRX-1001",
+  "accountId": "ACC-002",
+  "instrument": { "isin": "US0378331005", "symbol": "AAPL" },
+  "side": "BUY",
+  "quantity": 100,
+  "price": 185.40,
+  "tradeDate": "2026-10-15",
+  "asOf": "2026-10-16T09:00:00Z"
+}
+
+### B5. Snapshot 15 Oct after correction — still quantity 120, marketValue 22320
+GET {{host}}/api/accounts/ACC-002/snapshots?date=2026-10-15
+Accept: application/json
+
+### B6. Snapshot 16 Oct — quantity 100, marketValue 18600, unrealizedPnl 60
+GET {{host}}/api/accounts/ACC-002/snapshots?date=2026-10-16
+Accept: application/json
+
+### B7. Fee on 15 Oct — expect 201, isApplied true
+POST {{host}}/api/cash
+Content-Type: application/json
+
+{
+  "externalRef": "DEMO-FEE-1001",
+  "accountId": "ACC-002",
+  "type": "FEE",
+  "amount": -15.00,
+  "currency": "USD",
+  "tradeDate": "2026-10-15",
+  "asOf": "2026-10-15T10:20:00Z",
+  "description": "Brokerage fee"
+}
+
+### B8. Snapshot 15 Oct with fee — quantity 120, cashTotalUsd -15, totalValue 22305
+GET {{host}}/api/accounts/ACC-002/snapshots?date=2026-10-15
+Accept: application/json
+
+### B9. Snapshot 16 Oct with fee — quantity 100, cashTotalUsd -15, totalValue 18585
+GET {{host}}/api/accounts/ACC-002/snapshots?date=2026-10-16
+Accept: application/json
+
+# To re-run this file, delete DEMO-* rows from TradeEvents and CashEvents,
+# or change the externalRef values.

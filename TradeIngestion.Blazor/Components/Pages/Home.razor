@@ -1,0 +1,244 @@
+﻿@page "/"
+@using TradeIngestion.Blazor.Models
+@inject HttpClient Http
+@using System.Globalization
+
+@if (!string.IsNullOrEmpty(error))
+{
+    <div class="alert alert-danger">@error</div>
+}
+
+<div class="card mb-4">
+    <div class="card-body">
+        <div class="row g-3 align-items-end">
+            <div class="col-md-4">
+                <label class="form-label">Account</label>
+                <select class="form-select" @bind="selectedAccount" @bind:after="LoadAsync">
+                    @foreach (var account in accounts)
+                    {
+                        <option value="@account.AccountCode">@account.AccountCode — @account.Name</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">As-of date</label>
+                <input class="form-control" type="date" @bind="asOfDate" @bind:after="LoadAsync" />
+            </div>
+            @if (loading)
+            {
+                <div class="col-md-3 pb-2">
+                    <span class="spinner-border spinner-border-sm me-1"></span>
+                    <span class="text-muted">Loading…</span>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@if (snapshot is not null)
+{
+    <div class="row g-3 mb-4">
+        <div class="col-md-4">
+            <div class="metric">
+                <div class="label">Market value</div>
+                <div class="value">@D2(snapshot.TotalMarketValue) <small>@snapshot.Currency</small></div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="metric">
+                <div class="label">Cash</div>
+                <div class="value">@D2(snapshot.CashTotalUsd)</div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="metric">
+                <div class="label">Total value</div>
+                <div class="value">@D2(snapshot.TotalValue)</div>
+                @if (snapshot.FxRateUsdZar is not null)
+                {
+                    <div class="label mt-1">USD-ZAR @D2(snapshot.FxRateUsdZar.Value)</div>
+                }
+            </div>
+        </div>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-header bg-white fw-semibold">Positions — @snapshot.AccountId @snapshot.AsOfDate</div>
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>Symbol</th>
+                        <th class="text-end">Qty</th>
+                        <th class="text-end">Unit cost USD</th>
+                        <th class="text-end">Market price</th>
+                        <th class="text-end">Market value</th>
+                        <th class="text-end">Unreal. P/L</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (snapshot.Positions.Count == 0)
+                    {
+                        <tr><td colspan="6" class="text-muted">No positions</td></tr>
+                    }
+                    @foreach (var p in snapshot.Positions)
+                    {
+                        <tr>
+                            <td>
+                                <strong>@p.Symbol</strong>
+                                <div class="small text-muted">@p.Isin</div>
+                            </td>
+                            <td class="text-end">@D2(p.Quantity)</td>
+                            <td class="text-end">@D2(p.UnitCost)</td>
+                            <td class="text-end">
+                                @D2(p.MarketPrice)
+                                <div class="small text-muted">@D2(p.MarketPriceNative) @p.InstrumentCurrency</div>
+                            </td>
+                            <td class="text-end">@D2(p.MarketValue)</td>
+                            <td class="text-end @(p.UnrealizedPnl >= 0 ? "pnl-pos" : "pnl-neg")">
+                                @D2(p.UnrealizedPnl)
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-header bg-white fw-semibold">Cash</div>
+        <div class="table-responsive">
+            <table class="table mb-0">
+                <thead>
+                    <tr>
+                        <th>Currency</th>
+                        <th class="text-end">Amount</th>
+                        <th class="text-end">USD</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (snapshot.Cash.Count == 0)
+                    {
+                        <tr><td colspan="3" class="text-muted">No cash</td></tr>
+                    }
+                    @foreach (var c in snapshot.Cash)
+                    {
+                        <tr>
+                            <td>@c.Currency</td>
+                            <td class="text-end">@D2(c.Amount)</td>
+                            <td class="text-end">@D2(c.AmountUsd)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+
+<div class="card">
+    <div class="card-header bg-white fw-semibold">Recent events</div>
+    <div class="table-responsive">
+        <table class="table table-sm align-middle mb-0">
+            <thead>
+                <tr>
+                    <th>Received (UTC)</th>
+                    <th>Kind</th>
+                    <th>Ref</th>
+                    <th>Decision</th>
+                    <th>Applied</th>
+                    <th>Detail</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (events.Count == 0)
+                {
+                    <tr><td colspan="6" class="text-muted">Load a snapshot to see events</td></tr>
+                }
+                @foreach (var e in events)
+                {
+                    <tr class="@(e.IsApplied ? "" : "table-secondary")">
+                        <td class="small">@e.ReceivedAt.UtcDateTime.ToString("u")</td>
+                        <td>@e.Kind</td>
+                        <td><code>@e.ExternalRef</code></td>
+                        <td>
+                            <span class="badge @DecisionClass(e.Decision)">@e.Decision</span>
+                        </td>
+                        <td>@(e.IsApplied ? "yes" : "no")</td>
+                        <td class="small">
+                            @if (e.Kind == "Trade")
+                            {
+                                <span>@e.Side @D2(e.Quantity) @e.InstrumentSymbol @e.Kind @D2(e.Price) @e.Currency</span>
+                            }
+                            else
+                            {
+                                <span>@e.CashType @D2(e.Amount) @e.Currency @e.Description</span>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@code {
+    private List<AccountSummary> accounts = [];
+    private string selectedAccount = "ACC-001";
+    private DateOnly asOfDate = DateOnly.FromDateTime(DateTime.Today);
+    private PortfolioSnapshot? snapshot;
+    private List<AccountEvent> events = [];
+    private string? error;
+    private bool loading;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            accounts = await Http.GetFromJsonAsync<List<AccountSummary>>("api/accounts") ?? [];
+            if (accounts.Count > 0)
+            {
+                selectedAccount = accounts[0].AccountCode;
+            }
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            error = $"Could not load accounts. Is the API running? {ex.Message}";
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        error = null;
+        loading = true;
+        try
+        {
+            snapshot = await Http.GetFromJsonAsync<PortfolioSnapshot>(
+                $"api/accounts/{selectedAccount}/snapshots?date={asOfDate:yyyy-MM-dd}");
+            events = await Http.GetFromJsonAsync<List<AccountEvent>>(
+                $"api/accounts/{selectedAccount}/events?take=50") ?? [];
+        }
+        catch (Exception ex)
+        {
+            snapshot = null;
+            events = [];
+            error = ex.Message;
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private static string DecisionClass(string decision) => decision.ToLowerInvariant() switch
+    {
+        "accepted" or "1" => "text-bg-success",
+        "correctionapplied" or "3" => "text-bg-primary",
+        "duplicateignored" or "2" => "text-bg-secondary",
+        _ => "text-bg-light"
+    };
+
+    private static readonly CultureInfo N = CultureInfo.InvariantCulture;
+    private static string D2(decimal value) => value.ToString("N2", N);
+    private static string D2(decimal? value) => value is null ? "" : value.Value.ToString("N2", N);
+}

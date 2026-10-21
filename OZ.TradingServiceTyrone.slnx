@@ -1,5 +1,6 @@
 <Solution>
   <Project Path="TradeIngestion.Api/TradeIngestion.Api.csproj" />
+  <Project Path="TradeIngestion.Blazor/TradeIngestion.Blazor.csproj" Id="0c8a2a12-a888-48eb-a239-db2d7a8f01a8" />
   <Project Path="TradeIngestion.Core/TradeIngestion.Core.csproj" />
   <Project Path="TradeIngestion.Infrastructure/TradeIngestion.Infrastructure.csproj" />
   <Project Path="TradeIngestion.Tests/TradeIngestion.Tests.csproj" />

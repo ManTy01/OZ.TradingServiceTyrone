@@ -1,0 +1,158 @@
+# Same sequence as TradeIngestion.Api/TradeIngestion.Api.http
+# Open that file in Visual Studio (REST Client) with the API running.
+
+@host = https://localhost:7129
+
+# --- ACC-001 (1–2 Oct 2026) ---
+
+### Original
+POST {{host}}/api/trades
+Content-Type: application/json
+
+{
+  "externalRef": "DEMO-ACC001-TRX-1001",
+  "accountId": "ACC-001",
+  "instrument": { "isin": "US0378331005", "symbol": "AAPL" },
+  "side": "BUY",
+  "quantity": 120,
+  "price": 185.40,
+  "tradeDate": "2026-10-01",
+  "asOf": "2026-10-01T10:15:00Z"
+}
+
+### Duplicate
+POST {{host}}/api/trades
+Content-Type: application/json
+
+{
+  "externalRef": "DEMO-ACC001-TRX-1001",
+  "accountId": "ACC-001",
+  "instrument": { "isin": "US0378331005", "symbol": "AAPL" },
+  "side": "BUY",
+  "quantity": 120,
+  "price": 185.40,
+  "tradeDate": "2026-10-01",
+  "asOf": "2026-10-01T10:15:00Z"
+}
+
+### Snapshot 1 Oct (120 shares)
+GET {{host}}/api/accounts/ACC-001/snapshots?date=2026-10-01
+
+### Correction
+POST {{host}}/api/trades
+Content-Type: application/json
+
+{
+  "externalRef": "DEMO-ACC001-TRX-1001",
+  "accountId": "ACC-001",
+  "instrument": { "isin": "US0378331005", "symbol": "AAPL" },
+  "side": "BUY",
+  "quantity": 100,
+  "price": 185.40,
+  "tradeDate": "2026-10-01",
+  "asOf": "2026-10-02T09:00:00Z"
+}
+
+### Snapshot 1 Oct still 120
+GET {{host}}/api/accounts/ACC-001/snapshots?date=2026-10-01
+
+### Snapshot 2 Oct (100 shares)
+GET {{host}}/api/accounts/ACC-001/snapshots?date=2026-10-02
+
+### Fee
+POST {{host}}/api/cash
+Content-Type: application/json
+
+{
+  "externalRef": "DEMO-ACC001-FEE-1001",
+  "accountId": "ACC-001",
+  "type": "FEE",
+  "amount": -15.00,
+  "currency": "USD",
+  "tradeDate": "2026-10-01",
+  "asOf": "2026-10-01T10:20:00Z",
+  "description": "Brokerage fee"
+}
+
+### Snapshot 1 Oct with fee (22305)
+GET {{host}}/api/accounts/ACC-001/snapshots?date=2026-10-01
+
+### Snapshot 2 Oct with fee (18585)
+GET {{host}}/api/accounts/ACC-001/snapshots?date=2026-10-02
+
+# --- ACC-002 (15–16 Oct 2026) ---
+
+### Original
+POST {{host}}/api/trades
+Content-Type: application/json
+
+{
+  "externalRef": "DEMO-TRX-1001",
+  "accountId": "ACC-002",
+  "instrument": { "isin": "US0378331005", "symbol": "AAPL" },
+  "side": "BUY",
+  "quantity": 120,
+  "price": 185.40,
+  "tradeDate": "2026-10-15",
+  "asOf": "2026-10-15T10:15:00Z"
+}
+
+### Duplicate
+POST {{host}}/api/trades
+Content-Type: application/json
+
+{
+  "externalRef": "DEMO-TRX-1001",
+  "accountId": "ACC-002",
+  "instrument": { "isin": "US0378331005", "symbol": "AAPL" },
+  "side": "BUY",
+  "quantity": 120,
+  "price": 185.40,
+  "tradeDate": "2026-10-15",
+  "asOf": "2026-10-15T10:15:00Z"
+}
+
+### Snapshot 15 Oct (120 shares)
+GET {{host}}/api/accounts/ACC-002/snapshots?date=2026-10-15
+
+### Correction
+POST {{host}}/api/trades
+Content-Type: application/json
+
+{
+  "externalRef": "DEMO-TRX-1001",
+  "accountId": "ACC-002",
+  "instrument": { "isin": "US0378331005", "symbol": "AAPL" },
+  "side": "BUY",
+  "quantity": 100,
+  "price": 185.40,
+  "tradeDate": "2026-10-15",
+  "asOf": "2026-10-16T09:00:00Z"
+}
+
+### Snapshot 15 Oct still 120
+GET {{host}}/api/accounts/ACC-002/snapshots?date=2026-10-15
+
+### Snapshot 16 Oct (100 shares)
+GET {{host}}/api/accounts/ACC-002/snapshots?date=2026-10-16
+
+### Fee
+POST {{host}}/api/cash
+Content-Type: application/json
+
+{
+  "externalRef": "DEMO-FEE-1001",
+  "accountId": "ACC-002",
+  "type": "FEE",
+  "amount": -15.00,
+  "currency": "USD",
+  "tradeDate": "2026-10-15",
+  "asOf": "2026-10-15T10:20:00Z",
+  "description": "Brokerage fee"
+}
+
+### Snapshot 15 Oct with fee (22305)
+GET {{host}}/api/accounts/ACC-002/snapshots?date=2026-10-15
+
+### Snapshot 16 Oct with fee (18585)
+GET {{host}}/api/accounts/ACC-002/snapshots?date=2026-10-16

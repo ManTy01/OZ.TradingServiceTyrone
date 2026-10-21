@@ -1,0 +1,435 @@
+@page "/trade"
+@inject HttpClient Http
+
+<h2 class="h4 mb-3">Buy / sell and cash</h2>
+
+@if (!string.IsNullOrEmpty(error))
+{
+    <div class="alert alert-danger">@error</div>
+}
+@if (!string.IsNullOrEmpty(success))
+{
+    <div class="alert alert-success">@success</div>
+}
+
+<div class="card mb-4">
+    <div class="card-body">
+        <div class="row g-3 align-items-end">
+            <div class="col-md-4">
+                <label class="form-label">Account</label>
+                <select class="form-select" @bind="selectedAccount" @bind:after="LoadHoldingsAsync">
+                    @foreach (var account in accounts)
+                    {
+                        <option value="@account.AccountCode">@account.AccountCode — @account.Name</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Trade date</label>
+                <input class="form-control" type="date" value="@Today.ToString("yyyy-MM-dd")" disabled />
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-header bg-white fw-semibold">Instruments you can buy or sell</div>
+    <div class="table-responsive">
+        <table class="table table-hover mb-0 align-middle">
+            <thead>
+                <tr>
+                    <th>Symbol</th>
+                    <th>ISIN</th>
+                    <th class="text-end">Market price (USD)</th>
+                    <th class="text-end">You hold</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (instruments.Count == 0)
+                {
+                    <tr><td colspan="5" class="text-muted">Loading instruments…</td></tr>
+                }
+                @foreach (var item in instruments)
+                {
+                    var held = HeldQty(item.Isin);
+                    var canTrade = item.MarketPriceNative is > 0;
+                    <tr>
+                        <td><strong>@item.Symbol</strong></td>
+                        <td class="small">@item.Isin</td>
+                        <td class="text-end">
+                            @if (item.MarketPriceUsd.HasValue)
+                            {
+                                @D2(item.MarketPriceUsd.Value)
+                                @if (item.Currency != "USD" && item.MarketPriceNative.HasValue)
+                                {
+                                    <div class="small text-muted">@D2(item.MarketPriceNative.Value) @item.Currency</div>
+                                }
+                            }
+                            else
+                            {
+                                <span class="text-muted">No close</span>
+                            }
+                        </td>
+                        <td class="text-end">@D2(held)</td>
+                        <td class="text-end">
+                            <button class="btn btn-sm btn-success me-1" disabled="@(!canTrade)" @onclick="() => StartBuy(item)">Buy</button>
+                            <button class="btn btn-sm btn-outline-danger" disabled="@(held <= 0 || !canTrade)" @onclick="() => StartSell(item)">Sell</button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@if (tradeInstrument is not null)
+{
+    <div class="card mb-4">
+        <div class="card-header bg-white fw-semibold">
+            @tradeSide @tradeInstrument.Symbol
+            @if (tradeSide == "SELL")
+            {
+                <span class="text-muted fw-normal"> — max @D2(HeldQty(tradeInstrument.Isin)) shares</span>
+            }
+        </div>
+        <div class="card-body">
+            <p class="small text-muted mb-3">
+                Price is the market close and cannot be changed.
+                Cash is settled in USD at that close, then a $15.00 USD fee is posted.
+            </p>
+            <div class="row g-3 align-items-end">
+                <div class="col-md-3">
+                    <label class="form-label">Quantity</label>
+                    <input class="form-control" type="number" min="0.01" step="0.01" @bind="tradeQty" />
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Price (market)</label>
+                    <input class="form-control" value="@PriceLabel()" disabled />
+                    @if (tradeInstrument.Currency == "ZAR" && tradeInstrument.MarketPriceUsd is > 0)
+                    {
+                        <div class="form-text">
+                            @D2(tradePrice) ZAR ÷ @D2(tradePrice / tradeInstrument.MarketPriceUsd.Value) = @D2(tradeInstrument.MarketPriceUsd.Value) USD per share.
+                        </div>
+                    }
+                    <div class="form-text">
+                        @if (tradeSide == "BUY")
+                        {
+                            <span>Cash debit @D2(TradeValueUsd()) USD + @D2(FeeUsd) USD fee = @D2(TradeValueUsd() + FeeUsd) USD.</span>
+                        }
+                        else
+                        {
+                            <span>Cash credit @D2(TradeValueUsd()) USD − @D2(FeeUsd) USD fee = @D2(TradeValueUsd() - FeeUsd) USD.</span>
+                        }
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <button class="btn btn-primary" @onclick="SubmitTradeAsync" disabled="@busy">Submit trade</button>
+                    <button class="btn btn-link" @onclick="CancelTrade">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<div class="card mb-4">
+    <div class="card-header bg-white fw-semibold">Deposit / withdrawal</div>
+    <div class="card-body">
+        <p class="small text-muted">
+            Cash on this account (USD): <strong>@D2(cashUsd)</strong>
+        </p>
+        <div class="row g-3 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label">Amount (USD)</label>
+                <input class="form-control" type="number" min="0.01" step="0.01" @bind="cashAmount" />
+            </div>
+            <div class="col-md-4">
+                <button class="btn btn-success me-2" @onclick="() => SubmitCashAsync(true)" disabled="@busy">Deposit</button>
+                <button class="btn btn-outline-secondary" @onclick="() => SubmitCashAsync(false)" disabled="@busy">Withdraw</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private static readonly CultureInfo N = CultureInfo.InvariantCulture;
+    private static string D2(decimal value) => value.ToString("N2", N);
+    private static string NewRef(string prefix) => $"{prefix}-{Guid.NewGuid():N}".Substring(0, 20);
+
+    private List<AccountSummary> accounts = [];
+    private List<InstrumentSummary> instruments = [];
+    private PortfolioSnapshot? snapshot;
+    private string selectedAccount = "ACC-001";
+    private DateOnly Today => DateOnly.FromDateTime(DateTime.Today);
+    private string? error;
+    private string? success;
+    private bool busy;
+
+    private InstrumentSummary? tradeInstrument;
+    private string tradeSide = "BUY";
+    private decimal tradeQty = 1;
+    private decimal tradePrice = 186;
+
+    private decimal cashAmount = 100;
+    private decimal cashUsd;
+    private const decimal FeeUsd = 15.00m;
+
+    private decimal TradeValueUsd()
+    {
+        var unitUsd = tradeInstrument?.MarketPriceUsd ?? 0;
+        return Math.Round(tradeQty * unitUsd, 2, MidpointRounding.AwayFromZero);
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            accounts = await Http.GetFromJsonAsync<List<AccountSummary>>("api/accounts") ?? [];
+            if (accounts.Count > 0)
+            {
+                selectedAccount = accounts[0].AccountCode;
+            }
+            await LoadHoldingsAsync();
+        }
+        catch (Exception ex)
+        {
+            error = $"Could not load data. Is the API running? {ex.Message}";
+        }
+    }
+
+    private decimal HeldQty(string isin) =>
+        snapshot?.Positions.FirstOrDefault(p => p.Isin == isin)?.Quantity ?? 0;
+
+    private string PriceLabel()
+    {
+        if (tradeInstrument is null)
+        {
+            return "";
+        }
+
+        if (tradeInstrument.Currency == "ZAR" && tradeInstrument.MarketPriceUsd.HasValue)
+        {
+            return $"{D2(tradePrice)} ZAR ({D2(tradeInstrument.MarketPriceUsd.Value)} USD)";
+        }
+
+        return $"{D2(tradePrice)} USD";
+    }
+
+    private async Task LoadHoldingsAsync()
+    {
+        error = null;
+        try
+        {
+            instruments = await Http.GetFromJsonAsync<List<InstrumentSummary>>(
+                $"api/instruments?date={Today:yyyy-MM-dd}") ?? [];
+            snapshot = await Http.GetFromJsonAsync<PortfolioSnapshot>(
+                $"api/accounts/{selectedAccount}/snapshots?date={Today:yyyy-MM-dd}");
+            cashUsd = snapshot?.CashTotalUsd ?? 0;
+            if (tradeInstrument is not null)
+            {
+                tradeInstrument = instruments.FirstOrDefault(i => i.Isin == tradeInstrument.Isin);
+                tradePrice = tradeInstrument?.MarketPriceNative ?? 0;
+            }
+        }
+        catch (Exception ex)
+        {
+            snapshot = null;
+            cashUsd = 0;
+            error = ex.Message;
+        }
+    }
+
+    private void StartBuy(InstrumentSummary item) => StartTrade(item, "BUY");
+    private void StartSell(InstrumentSummary item) => StartTrade(item, "SELL");
+
+    private void StartTrade(InstrumentSummary item, string side)
+    {
+        error = null;
+        success = null;
+        tradeInstrument = item;
+        tradeSide = side;
+        tradeQty = side == "SELL" ? Math.Min(1, HeldQty(item.Isin)) : 1;
+        tradePrice = item.MarketPriceNative ?? 0;
+    }
+
+    private void CancelTrade()
+    {
+        tradeInstrument = null;
+    }
+
+    private async Task SubmitTradeAsync()
+    {
+        if (tradeInstrument is null)
+        {
+            return;
+        }
+
+        error = null;
+        success = null;
+
+        var held = HeldQty(tradeInstrument.Isin);
+        if (tradeSide == "SELL" && tradeQty > held)
+        {
+            error = $"Cannot sell {D2(tradeQty)} {tradeInstrument.Symbol}. You hold {D2(held)}.";
+            return;
+        }
+
+        if (tradeQty <= 0)
+        {
+            error = "Quantity must be greater than 0.";
+            return;
+        }
+
+        if (tradeInstrument.MarketPriceNative is not > 0)
+        {
+            error = "No market close for this instrument on the as-of date.";
+            return;
+        }
+
+        tradePrice = tradeInstrument.MarketPriceNative.Value;
+        if (tradeInstrument.MarketPriceUsd is not > 0)
+        {
+            error = "No USD market price for this instrument on the as-of date.";
+            return;
+        }
+
+        var valueUsd = TradeValueUsd();
+        if (tradeSide == "BUY" && cashUsd < valueUsd + FeeUsd)
+        {
+            error = $"Need {D2(valueUsd + FeeUsd)} USD cash to buy (price {D2(valueUsd)} + fee {D2(FeeUsd)}). Deposit first. You have {D2(cashUsd)} USD.";
+            return;
+        }
+
+        busy = true;
+        try
+        {
+            var now = DateTimeOffset.UtcNow;
+            var tradeRef = NewRef("UI-TRX");
+            var trade = new TradeSubmissionRequest
+            {
+                ExternalRef = tradeRef,
+                AccountId = selectedAccount,
+                Instrument = new InstrumentRefRequest
+                {
+                    Isin = tradeInstrument.Isin,
+                    Symbol = tradeInstrument.Symbol
+                },
+                Side = tradeSide,
+                Quantity = tradeQty,
+                Price = tradePrice,
+                TradeDate = Today,
+                AsOf = now
+            };
+
+            var tradeResponse = await Http.PostAsJsonAsync("api/trades", trade);
+            if (!tradeResponse.IsSuccessStatusCode)
+            {
+                error = await tradeResponse.Content.ReadAsStringAsync();
+                return;
+            }
+
+            var settlement = new CashSubmissionRequest
+            {
+                ExternalRef = NewRef("UI-SET"),
+                AccountId = selectedAccount,
+                Type = "CASH_ADJUSTMENT",
+                Amount = tradeSide == "BUY" ? -valueUsd : valueUsd,
+                Currency = "USD",
+                TradeDate = Today,
+                AsOf = now,
+                Description = $"{tradeSide} {D2(tradeQty)} {tradeInstrument.Symbol} at {D2(valueUsd)} USD"
+            };
+
+            var settlementResponse = await Http.PostAsJsonAsync("api/cash", settlement);
+            if (!settlementResponse.IsSuccessStatusCode)
+            {
+                error = $"Trade posted, but cash settlement failed: {await settlementResponse.Content.ReadAsStringAsync()}";
+                await LoadHoldingsAsync();
+                return;
+            }
+
+            var fee = new CashSubmissionRequest
+            {
+                ExternalRef = NewRef("UI-FEE"),
+                AccountId = selectedAccount,
+                Type = "FEE",
+                Amount = -FeeUsd,
+                Currency = "USD",
+                TradeDate = Today,
+                AsOf = now,
+                Description = $"Brokerage for {tradeRef}"
+            };
+
+            var feeResponse = await Http.PostAsJsonAsync("api/cash", fee);
+            if (!feeResponse.IsSuccessStatusCode)
+            {
+                error = $"Trade and settlement posted, but fee failed: {await feeResponse.Content.ReadAsStringAsync()}";
+            }
+            else
+            {
+                success = tradeSide == "BUY"
+                    ? $"Bought {D2(tradeQty)} {tradeInstrument.Symbol} for {D2(valueUsd)} USD + {D2(FeeUsd)} USD fee."
+                    : $"Sold {D2(tradeQty)} {tradeInstrument.Symbol} for {D2(valueUsd)} USD − {D2(FeeUsd)} USD fee.";
+                tradeInstrument = null;
+            }
+
+            await LoadHoldingsAsync();
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task SubmitCashAsync(bool deposit)
+    {
+        error = null;
+        success = null;
+        if (cashAmount <= 0)
+        {
+            error = "Amount must be greater than 0.";
+            return;
+        }
+
+        busy = true;
+        try
+        {
+            var now = DateTimeOffset.UtcNow;
+            var request = new CashSubmissionRequest
+            {
+                ExternalRef = NewRef("UI-CASH"),
+                AccountId = selectedAccount,
+                Type = "CASH_ADJUSTMENT",
+                Amount = deposit ? cashAmount : -cashAmount,
+                Currency = "USD",
+                TradeDate = Today,
+                AsOf = now,
+                Description = deposit ? "Deposit" : "Withdrawal"
+            };
+
+            var response = await Http.PostAsJsonAsync("api/cash", request);
+            if (!response.IsSuccessStatusCode)
+            {
+                error = await response.Content.ReadAsStringAsync();
+                return;
+            }
+
+            success = deposit
+                ? $"Deposited {D2(cashAmount)} USD."
+                : $"Withdrew {D2(cashAmount)} USD.";
+            await LoadHoldingsAsync();
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+}

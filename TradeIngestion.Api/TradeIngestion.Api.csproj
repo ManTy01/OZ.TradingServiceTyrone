@@ -18,10 +18,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="Controllers\" />
-  </ItemGroup>
-
-  <ItemGroup>
     <ProjectReference Include="..\TradeIngestion.Core\TradeIngestion.Core.csproj" />
     <ProjectReference Include="..\TradeIngestion.Infrastructure\TradeIngestion.Infrastructure.csproj" />
   </ItemGroup>
