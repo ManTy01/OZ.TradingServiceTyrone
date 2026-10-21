@@ -7,7 +7,7 @@ SET QUOTED_IDENTIFIER ON;
 GO
 
 /*
-  Task 2 artifact — same snapshot as GET /api/accounts/{code}/snapshots?date=
+  Task 2 artifact ï¿½ same snapshot as GET /api/accounts/{code}/snapshots?date=
 
   This is the version that runs in LocalDB (better than the first draft):
     - Resolve AccountId once (AccountCode is unique).
@@ -308,7 +308,7 @@ BEGIN
     OPTION (MAXRECURSION 0);
 
     -------------------------------------------------------------------------
-    -- 7–8. Cash: same versioning, convert to USD, group by currency.
+    -- 7ï¿½8. Cash: same versioning, convert to USD, group by currency.
     -------------------------------------------------------------------------
     ;WITH RankedCash AS
     (
